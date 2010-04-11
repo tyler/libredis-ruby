@@ -1,0 +1,5 @@
+ext/*.o
+ext/mkmf.log
+ext/*.bundle
+ext/*.dSYM
+ext/Makefile

@@ -1,0 +1,41 @@
+Ruby Bindings to Libredis
+-------------------------
+
+To build:
+
+cd ext
+ruby extconf.rb
+make
+
+
+For some reason, I had a hard time getting it to work with the shared object that
+Libredis normally outputs. Maybe it's just me. Still, I had it output a static
+library instead and have included it (compiled for OS X) in ext/lib. For what it's
+worth, extconf.rb tries to find the shared object first, then reverts back to
+using the included library.
+
+
+It only supports very simple SET and GET operations at the moment. It only
+supports a single connection. It does not do batch operations. It does not come
+with batteries and may explode at will.
+
+Still, if you want to give it a try, it looks a bit like this:
+
+>> require 'ext/redis'
+=> true
+
+>> r = Redis.new('127.0.0.1:6379')
+=> #<Redis:0x108150eb0>
+
+>> r.set 'xyz', 'abc'
+=> true
+
+>> r.get 'xyz'
+=> "abc"
+
+
+There's a long way to go.
+
+
+
+Tyler

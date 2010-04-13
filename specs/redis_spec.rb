@@ -32,5 +32,13 @@ describe 'Redis' do
         @redis.get('my_key').should == 'my_value'
       end
     end
+
+    describe :incr do
+      it 'increments the value of a key' do
+        @redis.set('incr_test', '0')
+        @redis.incr('incr_test').should == 1
+        @redis.get('incr_test').should == '1'
+      end
+    end
   end
 end

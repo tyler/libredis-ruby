@@ -40,5 +40,22 @@ describe 'Redis' do
         @redis.get('incr_test').should == '1'
       end
     end
+
+    describe :decr do
+      it 'decrements the value of a key' do
+        @redis.set('decr_test', '3')
+        @redis.decr('decr_test').should == 2
+        @redis.get('decr_test').should == '2'
+      end
+    end
+
+    describe :keys do
+      it 'returns a space separated list of keys' do
+        @redis.set('keys_a', '1')
+        @redis.set('keys_b', '1')
+        @redis.set('keys_c', '1')
+        @redis.keys('keys_?').should == ['keys_a', 'keys_b', 'keys_c']
+      end
+    end
   end
 end

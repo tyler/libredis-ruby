@@ -1,20 +1,12 @@
 #include <ruby.h>
 #include <string.h>
 #include <stdarg.h>
-#include "include/redis.h"
-
-typedef struct {
-    Module * module;
-    Connection * connection;
-    VALUE connection_string;
-} Redis;
-
-#define SET_CMD "SET %s %ld\r\n%s\r\n"
-#define GET_CMD "GET %s\r\n"
-
-#define OK "OK\r\n"
+#include "redis.h"
 
 VALUE cRedis, cRedisError;
+
+
+/* Redis struct functions */
 
 void Redis_free(Redis * redis) {
     Connection_free(redis->connection);
@@ -32,38 +24,8 @@ static VALUE Redis_alloc(VALUE klass) {
     return obj;
 }
 
-static VALUE Redis_initialize(VALUE self, VALUE conn_string) {
-    Redis * redis;
-    Data_Get_Struct(self, Redis, redis);
-    redis->connection_string = conn_string;
-    redis->connection = Connection_new(RSTRING_PTR(conn_string));
-    return self;
-}
 
-static VALUE Redis_connections(VALUE self) {
-    Redis * redis;
-    Data_Get_Struct(self, Redis, redis);
-
-    VALUE connections = rb_ary_new();
-    rb_ary_push(connections, redis->connection_string);
-    
-    return connections;
-}
-
-#define GET_REDIS() \
-    Redis * redis; \
-    Data_Get_Struct(self, Redis, redis)
-
-#define CRLF "\r\n"
-
-#define INCR "INCR "
-
-typedef struct {
-    char * data;
-    ReplyType reply_type;
-    size_t length;
-    Executor * executor;
-} Reply;
+/* Reply struct functions */
 
 static Reply * Reply_new() {
     return (Reply *) malloc(sizeof(Reply));
@@ -73,6 +35,9 @@ static void Reply_free(Reply * reply) {
     Executor_free(reply->executor);
     free(reply);
 }
+
+
+/* Utility functions */
 
 static Batch * create_batch(int n, ...) {
     va_list ap;
@@ -88,8 +53,11 @@ static Batch * create_batch(int n, ...) {
     }
     va_end(ap);
 
-    Batch_write(batch, CRLF, (sizeof(CRLF) - 1), 1);
+    return batch;
+}
 
+static Batch * finish_batch(Batch * batch) {
+    Batch_write(batch, CRLF, (sizeof(CRLF) - 1), 1);
     return batch;
 }
 
@@ -111,116 +79,87 @@ static Reply * execute_batch(Redis * redis, Batch * batch) {
     return reply;
 }
 
-#define REPLY_TO_BOOLEAN(reply, reply_ret) \
-    VALUE reply_ret; \
-    do { \
-        if(strcmp((reply)->data, OK)) { \
-            reply_ret = Qfalse; \
-        } else { \
-            reply_ret = Qtrue; \
-        } \
-    } while(0)
+static VALUE return_value(Reply * reply) {
+    switch(reply->reply_type) {
+    case RT_INTEGER:
+        return INT2FIX(atoi(reply->data));
+    case RT_OK:
+        return Qtrue;
+    case RT_NONE:
+        return Qnil;
+    case RT_BULK_NIL:
+        return Qnil;
+    case RT_BULK:
+        return rb_str_new(reply->data, reply->length);
+    }
+}
 
-#define REPLY_TO_INT(reply, reply_ret) \
-    VALUE reply_ret; \
-    do { \
-        if((reply)->reply_type == RT_INTEGER) { \
-            reply_ret = INT2FIX(atoi(reply->data)); \
-        } else { \
-            rb_raise(cRedisError, "Expected Integer return type.  Got something else."); \
-        } \
-    } while(0)
-    
+static void add_blob(Batch * batch, VALUE value) {
+    Batch_write(batch, " ", sizeof(" ") - 1, 0);
+    Batch_write_decimal(batch, RSTRING_LEN(value));
+    Batch_write(batch, CRLF, sizeof(CRLF) - 1, 0);
+    Batch_write(batch, RSTRING_PTR(value), RSTRING_LEN(value), 0);
+}
 
+/* API functions */
 
-#define EXECUTE(args, ...) \
-    GET_REDIS(); \
-    Batch * batch = create_batch(args, ##__VA_ARGS__); \
-    Reply * reply = execute_batch(redis, batch)
+static VALUE Redis_initialize(VALUE self, VALUE conn_string) {
+    Redis * redis;
+    Data_Get_Struct(self, Redis, redis);
+    redis->connection_string = conn_string;
+    redis->connection = Connection_new(RSTRING_PTR(conn_string));
+    return self;
+}
 
-#define CLEANUP() \
-    Reply_free(reply); \
-    Batch_free(batch)
-    
+static VALUE Redis_connections(VALUE self) {
+    Redis * redis;
+    Data_Get_Struct(self, Redis, redis);
+    VALUE connections = rb_ary_new();
+    rb_ary_push(connections, redis->connection_string);
+    return connections;
+}
 
 static VALUE Redis_incr(VALUE self, VALUE key) {
-    EXECUTE(2, INCR, (int) (sizeof(INCR) - 1), RSTRING_PTR(key), (int) RSTRING_LEN(key));
-    REPLY_TO_INT(reply, ret);
+    EXECUTE(redis, 2, INCR, (int) (sizeof(INCR) - 1), RSTRING_PTR(key), (int) RSTRING_LEN(key));
+    VALUE ret = return_value(reply);
     CLEANUP();
     return ret;
 }
 
+static VALUE Redis_decr(VALUE self, VALUE key) {
+    EXECUTE(redis, 2, DECR, (int) (sizeof(DECR) - 1), RSTRING_PTR(key), (int) RSTRING_LEN(key));
+    VALUE ret = return_value(reply);
+    CLEANUP();
+    return ret;
+}
+
+static VALUE Redis_keys(VALUE self, VALUE pattern) {
+    EXECUTE(redis, 2, KEYS, (int) (sizeof(KEYS) - 1), RSTRING_PTR(pattern), (int) RSTRING_LEN(pattern));
+    VALUE ret = return_value(reply);
+    CLEANUP();
+    return rb_str_split(ret, " ");
+}
 
 static VALUE Redis_set(VALUE self, VALUE key, VALUE value) {
-    int cmd_len = RSTRING_LEN(key) + RSTRING_LEN(value) + sizeof(SET_CMD) + 16;
-    char cmd[cmd_len];
-    sprintf(cmd, SET_CMD, RSTRING_PTR(key), RSTRING_LEN(value), RSTRING_PTR(value));
+    GET_REDIS(redis);
+    Batch * batch = create_batch(2, SET, (int) (sizeof(SET) - 1), RSTRING_PTR(key), (int) RSTRING_LEN(key));
+    add_blob(batch, value);
+    finish_batch(batch);
 
-    GET_REDIS();
-
-    Batch * batch = Batch_new();
-    Batch_write(batch, cmd, strlen(cmd), 1);
+    Reply * reply = execute_batch(redis, batch);
     
-    Executor * executor = Executor_new();
-    Executor_add(executor, redis->connection, batch);
-    
-    if(Executor_execute(executor, 500) <= 0) {
-        char * error = Module_last_error(redis->module);
-        rb_raise(cRedisError, error);
-    }
-    
-    ReplyType reply_type;
-    char * reply_data;
-    size_t reply_len;
-
-    Batch_next_reply(batch, &reply_type, &reply_data, &reply_len);
-
-    VALUE ret;
-
-    if(strcmp(reply_data, OK)) {
-        ret = Qfalse;
-    } else {
-        ret = Qtrue;
-    }
-
-    Executor_free(executor);
-    Batch_free(batch);
-
+    VALUE ret = return_value(reply);
+    CLEANUP();
     return ret;
 }
 
 static VALUE Redis_get(VALUE self, VALUE key) {
-    int cmd_len = RSTRING_LEN(key) + sizeof(GET_CMD) + 16;
-    char cmd[cmd_len];
-    sprintf(cmd, GET_CMD, RSTRING_PTR(key));
-
-    Redis * redis;
-    Data_Get_Struct(self, Redis, redis);
-
-    Batch * batch = Batch_new();
-    Batch_write(batch, cmd, strlen(cmd), 1);
-    
-    Executor * executor = Executor_new();
-    Executor_add(executor, redis->connection, batch);
-    
-    if(Executor_execute(executor, 500) <= 0) {
-        char * error = Module_last_error(redis->module);
-        rb_raise(cRedisError, error);
-    }
-    
-    ReplyType reply_type;
-    char * reply_data;
-    size_t reply_len;
-
-    Batch_next_reply(batch, &reply_type, &reply_data, &reply_len);
-
-    VALUE ret = rb_str_new(reply_data, reply_len);
-
-    Executor_free(executor);
-    Batch_free(batch);
-
+    EXECUTE(redis, 2, GET, (int) (sizeof(GET) - 1), RSTRING_PTR(key), (int) RSTRING_LEN(key));
+    VALUE ret = return_value(reply);
+    CLEANUP();
     return ret;
 }
+
 
 void Init_redis() {
     cRedis = rb_define_class("Redis", rb_cObject);
@@ -230,6 +169,8 @@ void Init_redis() {
     rb_define_method(cRedis, "set", Redis_set, 2);
     rb_define_method(cRedis, "get", Redis_get, 1);
     rb_define_method(cRedis, "incr", Redis_incr, 1);
+    rb_define_method(cRedis, "decr", Redis_decr, 1);
+    rb_define_method(cRedis, "keys", Redis_keys, 1);
 
     cRedisError = rb_define_class("RedisError", rb_eStandardError);
 }

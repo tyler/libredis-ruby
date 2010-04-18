@@ -84,13 +84,15 @@ static VALUE return_value(Reply * reply) {
     case RT_INTEGER:
         return INT2FIX(atoi(reply->data));
     case RT_OK:
-        return Qtrue;
+        return rb_str_new(reply->data, reply->length);
     case RT_NONE:
         return Qnil;
     case RT_BULK_NIL:
         return Qnil;
     case RT_BULK:
         return rb_str_new(reply->data, reply->length);
+    case RT_ERROR:
+        rb_raise(cRedisError, reply->data);
     }
 }
 
@@ -119,26 +121,29 @@ static VALUE Redis_connections(VALUE self) {
     return connections;
 }
 
-static VALUE Redis_incr(VALUE self, VALUE key) {
-    EXECUTE(redis, 2, INCR, (int) (sizeof(INCR) - 1), RSTRING_PTR(key), (int) RSTRING_LEN(key));
-    VALUE ret = return_value(reply);
+
+static VALUE Redis_quit(VALUE self) {
+    EXECUTE(redis, 1, QUIT, (int) (sizeof(QUIT) - 1));
     CLEANUP();
-    return ret;
+    return Qtrue;
 }
 
-static VALUE Redis_decr(VALUE self, VALUE key) {
-    EXECUTE(redis, 2, DECR, (int) (sizeof(DECR) - 1), RSTRING_PTR(key), (int) RSTRING_LEN(key));
-    VALUE ret = return_value(reply);
-    CLEANUP();
-    return ret;
-}
+REDIS_COMMAND_1ARG(AUTH, auth);
 
-static VALUE Redis_keys(VALUE self, VALUE pattern) {
-    EXECUTE(redis, 2, KEYS, (int) (sizeof(KEYS) - 1), RSTRING_PTR(pattern), (int) RSTRING_LEN(pattern));
-    VALUE ret = return_value(reply);
-    CLEANUP();
-    return rb_str_split(ret, " ");
-}
+REDIS_COMMAND_1ARG_BODY(EXISTS, exists, INT2BOOL(ret));
+REDIS_COMMAND_1ARG(DEL, del);
+REDIS_COMMAND_1ARG(CMD_TYPE, type);
+REDIS_COMMAND_NOARGS(RANDOMKEY, random_key);
+REDIS_COMMAND_2ARGS_BODY(RENAME, rename, INT2BOOL(ret));
+REDIS_COMMAND_2ARGS_BODY(RENAMENX, renamenx, INT2BOOL(ret));
+REDIS_COMMAND_NOARGS(DBSIZE, dbsize);
+
+REDIS_COMMAND_NOARGS(FLUSHALL, flush_all);
+
+REDIS_COMMAND_1ARG(INCR, incr);
+REDIS_COMMAND_1ARG(DECR, decr);
+REDIS_COMMAND_1ARG_BODY(KEYS, keys, rb_str_split(ret, " "));
+
 
 static VALUE Redis_set(VALUE self, VALUE key, VALUE value) {
     GET_REDIS(redis);
@@ -153,12 +158,8 @@ static VALUE Redis_set(VALUE self, VALUE key, VALUE value) {
     return ret;
 }
 
-static VALUE Redis_get(VALUE self, VALUE key) {
-    EXECUTE(redis, 2, GET, (int) (sizeof(GET) - 1), RSTRING_PTR(key), (int) RSTRING_LEN(key));
-    VALUE ret = return_value(reply);
-    CLEANUP();
-    return ret;
-}
+REDIS_COMMAND_1ARG(GET, get);
+
 
 
 void Init_redis() {
@@ -166,6 +167,19 @@ void Init_redis() {
     rb_define_alloc_func(cRedis, Redis_alloc);
     rb_define_method(cRedis, "initialize", Redis_initialize, 1);
     rb_define_method(cRedis, "connections", Redis_connections, 0);
+
+    rb_define_method(cRedis, "quit", Redis_quit, 0);
+    rb_define_method(cRedis, "auth", Redis_auth, 1);
+
+    rb_define_method(cRedis, "exists?", Redis_exists, 1);
+    rb_define_method(cRedis, "del", Redis_del, 1);
+    rb_define_method(cRedis, "type", Redis_type, 1);
+    rb_define_method(cRedis, "random_key", Redis_random_key, 0);
+    rb_define_method(cRedis, "rename", Redis_rename, 2);
+    rb_define_method(cRedis, "renamenx", Redis_renamenx, 2);
+    rb_define_method(cRedis, "dbsize", Redis_dbsize, 0);
+    rb_define_method(cRedis, "flush_all", Redis_flush_all, 0);
+
     rb_define_method(cRedis, "set", Redis_set, 2);
     rb_define_method(cRedis, "get", Redis_get, 1);
     rb_define_method(cRedis, "incr", Redis_incr, 1);

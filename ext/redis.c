@@ -39,46 +39,6 @@ static void Reply_free(Reply * reply) {
 
 /* Utility functions */
 
-static Batch * create_batch(int n, ...) {
-    va_list ap;
-    va_start(ap, n);
-
-    Batch * batch = Batch_new();
-
-    int i;
-    for(i = 0; i < n; i++) {
-        char * partial = va_arg(ap, char *);
-        int size = va_arg(ap, int);
-        Batch_write(batch, partial, size, 0);
-    }
-    va_end(ap);
-
-    return batch;
-}
-
-static Batch * finish_batch(Batch * batch) {
-    Batch_write(batch, CRLF, (sizeof(CRLF) - 1), 1);
-    return batch;
-}
-
-static Reply * execute_batch(Redis * redis, Batch * batch) {
-    Executor * executor = Executor_new();
-    Executor_add(executor, redis->connection, batch);
-    
-    if(Executor_execute(executor, 500) <= 0) {
-        char * error = Module_last_error(redis->module);
-        rb_raise(cRedisError, error);
-    }
-    
-    Reply * reply = Reply_new();
-
-    reply->executor = executor;
-
-    Batch_next_reply(batch, &(reply->reply_type), &(reply->data), &(reply->length));
-
-    return reply;
-}
-
 static VALUE return_value(Reply * reply) {
     switch(reply->reply_type) {
     case RT_INTEGER:
@@ -94,13 +54,6 @@ static VALUE return_value(Reply * reply) {
     case RT_ERROR:
         rb_raise(cRedisError, reply->data);
     }
-}
-
-static void add_blob(Batch * batch, VALUE value) {
-    Batch_write(batch, " ", sizeof(" ") - 1, 0);
-    Batch_write_decimal(batch, RSTRING_LEN(value));
-    Batch_write(batch, CRLF, sizeof(CRLF) - 1, 0);
-    Batch_write(batch, RSTRING_PTR(value), RSTRING_LEN(value), 0);
 }
 
 /* API functions */
@@ -122,45 +75,48 @@ static VALUE Redis_connections(VALUE self) {
 }
 
 
-static VALUE Redis_quit(VALUE self) {
-    EXECUTE(redis, 1, QUIT, (int) (sizeof(QUIT) - 1));
-    CLEANUP();
-    return Qtrue;
-}
+REDIS_CMD_NOARGS(QUIT, quit, ANY)
+REDIS_CMD_STR(AUTH, auth, ANY)
 
-REDIS_COMMAND_1ARG(AUTH, auth);
+REDIS_CMD_STR(EXISTS, exists, BOOLEAN)
+REDIS_CMD_STR(DEL, del, ANY)
+REDIS_CMD_STR(TYPE, type, ANY)
+REDIS_CMD_NOARGS(RANDOMKEY, random_key, ANY)
+REDIS_CMD_STR_STR(RENAME, rename, STATUS)
+REDIS_CMD_STR_STR(RENAMENX, renamenx, STATUS)
+REDIS_CMD_NOARGS(DBSIZE, dbsize, ANY)
+REDIS_CMD_STR_INT(EXPIRE, expire, ANY)
+REDIS_CMD_STR_INT(EXPIREAT, expire_at, ANY)
+REDIS_CMD_STR(TTL, ttl, ANY)
+REDIS_CMD_INT(SELECT, select, ANY)
+REDIS_CMD_STR_INT(MOVE, move, STATUS)
+REDIS_CMD_NOARGS(FLUSHDB, flush_db, STATUS)
+REDIS_CMD_NOARGS(FLUSHALL, flush_all, STATUS)
 
-REDIS_COMMAND_1ARG_BODY(EXISTS, exists, INT2BOOL(ret));
-REDIS_COMMAND_1ARG(DEL, del);
-REDIS_COMMAND_1ARG(CMD_TYPE, type);
-REDIS_COMMAND_NOARGS(RANDOMKEY, random_key);
-REDIS_COMMAND_2ARGS_BODY(RENAME, rename, INT2BOOL(ret));
-REDIS_COMMAND_2ARGS_BODY(RENAMENX, renamenx, INT2BOOL(ret));
-REDIS_COMMAND_NOARGS(DBSIZE, dbsize);
+REDIS_CMD_STR(INCR, incr, ANY)
+REDIS_CMD_STR(DECR, decr, ANY)
 
-REDIS_COMMAND_NOARGS(FLUSHALL, flush_all);
+#define KEYS_RETURN \
+    VALUE ret = rb_str_split(rb_str_new(reply->data, reply->length), " ")
 
-REDIS_COMMAND_1ARG(INCR, incr);
-REDIS_COMMAND_1ARG(DECR, decr);
-REDIS_COMMAND_1ARG_BODY(KEYS, keys, rb_str_split(ret, " "));
+REDIS_CMD_STR(KEYS, keys, KEYS_RETURN)
 
+REDIS_CMD_STR_BLOB(SET, set, ANY)
+REDIS_CMD_STR(GET, get, ANY)
+REDIS_CMD_STR_BLOB(GETSET, get_set, ANY)
+REDIS_CMD_STR_BLOB(SETNX, setnx, ANY)
 
-static VALUE Redis_set(VALUE self, VALUE key, VALUE value) {
-    GET_REDIS(redis);
-    Batch * batch = create_batch(2, SET, (int) (sizeof(SET) - 1), RSTRING_PTR(key), (int) RSTRING_LEN(key));
-    add_blob(batch, value);
-    finish_batch(batch);
-
-    Reply * reply = execute_batch(redis, batch);
-    
-    VALUE ret = return_value(reply);
-    CLEANUP();
-    return ret;
-}
-
-REDIS_COMMAND_1ARG(GET, get);
-
-
+REDIS_CMD_STR_BLOB(RPUSH, rpush, ANY)
+REDIS_CMD_STR_BLOB(LPUSH, lpush, ANY)
+REDIS_CMD_STR(LLEN, llen, ANY)
+REDIS_CMD_STR_INT_INT(LRANGE, lrange, ANY)
+REDIS_CMD_STR_INT_INT(LTRIM, ltrim, ANY)
+REDIS_CMD_STR_INT(LINDEX, lindex, ANY)
+REDIS_CMD_STR_INT_BLOB(LSET, lset, ANY)
+REDIS_CMD_STR_INT_BLOB(LREM, lrem, ANY)
+REDIS_CMD_STR(LPOP, lpop, ANY)
+REDIS_CMD_STR(RPOP, rpop, ANY)
+REDIS_CMD_STR_STR(RPOPLPUSH, rpoplpush, ANY)
 
 void Init_redis() {
     cRedis = rb_define_class("Redis", rb_cObject);
@@ -174,17 +130,40 @@ void Init_redis() {
     rb_define_method(cRedis, "exists?", Redis_exists, 1);
     rb_define_method(cRedis, "del", Redis_del, 1);
     rb_define_method(cRedis, "type", Redis_type, 1);
+    rb_define_method(cRedis, "keys", Redis_keys, 1);
     rb_define_method(cRedis, "random_key", Redis_random_key, 0);
     rb_define_method(cRedis, "rename", Redis_rename, 2);
     rb_define_method(cRedis, "renamenx", Redis_renamenx, 2);
     rb_define_method(cRedis, "dbsize", Redis_dbsize, 0);
+    rb_define_method(cRedis, "expire", Redis_expire, 2);
+    rb_define_method(cRedis, "expire_at", Redis_expire_at, 2);
+    rb_define_method(cRedis, "ttl", Redis_ttl, 1);
+    rb_define_method(cRedis, "select", Redis_select, 1);
+    rb_define_method(cRedis, "move", Redis_move, 2);
+    rb_define_method(cRedis, "flush_db", Redis_flush_db, 0);
     rb_define_method(cRedis, "flush_all", Redis_flush_all, 0);
 
     rb_define_method(cRedis, "set", Redis_set, 2);
     rb_define_method(cRedis, "get", Redis_get, 1);
+    rb_define_method(cRedis, "getset", Redis_get_set, 2);
+    rb_define_method(cRedis, "setnx", Redis_setnx, 2);
     rb_define_method(cRedis, "incr", Redis_incr, 1);
     rb_define_method(cRedis, "decr", Redis_decr, 1);
-    rb_define_method(cRedis, "keys", Redis_keys, 1);
+
+    rb_define_method(cRedis, "rpush", Redis_rpush, 2);
+    rb_define_method(cRedis, "lpush", Redis_lpush, 2);
+    rb_define_method(cRedis, "llen", Redis_llen, 1);
+    rb_define_method(cRedis, "lrange", Redis_lrange, 3);
+    rb_define_method(cRedis, "ltrim", Redis_ltrim, 3);
+    rb_define_method(cRedis, "lindex", Redis_lindex, 2);
+    rb_define_method(cRedis, "lset", Redis_lset, 3);
+    rb_define_method(cRedis, "lrem", Redis_lrem, 3);
+    rb_define_method(cRedis, "lpop", Redis_lpop, 1);
+    rb_define_method(cRedis, "rpop", Redis_rpop, 1);
+    rb_define_method(cRedis, "rpoplpush", Redis_rpoplpush, 2);
+
+
+    
 
     cRedisError = rb_define_class("RedisError", rb_eStandardError);
 }

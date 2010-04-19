@@ -74,6 +74,20 @@ typedef struct {
     Batch_free(batch)
 
 
+/* Argument types */
+
+#define STR(arg_name)                           \
+    WRITE_STRING(arg_name)
+
+#define INT(arg_name)                           \
+    WRITE_INT(arg_name)
+
+#define BLOB(arg_name)                          \
+    WRITE_BLOB(arg_name)
+
+
+/* Return macros */
+
 #define ANY                                     \
     VALUE ret = return_value(reply)
 
@@ -116,79 +130,39 @@ typedef struct {
 
 /* Function prototypes */
 
-#define REDIS_CMD_INT(command, method, return_body)     \
-    FUNCTION_LINE_1ARG(method, a) {         \
-        SETUP(command);                     \
-        WRITE_INT(a);                       \
-        EXECUTE(return_body);                          \
-        return ret;                         \
-    }
-
-#define REDIS_CMD_STR(command, method, return_body)        \
-    FUNCTION_LINE_1ARG(method, a) {            \
-        SETUP(command);                        \
-        WRITE_STRING(a);                       \
-        EXECUTE(return_body);                             \
-        return ret;                            \
-    }
-
-#define REDIS_CMD_STR_INT(command, method, return_body)        \
-    FUNCTION_LINE_2ARGS(method, a, b) {             \
-        SETUP(command);                             \
-        WRITE_STRING(a);                            \
-        WRITE_SPACE();                              \
-        WRITE_INT(b);                               \
-        EXECUTE(return_body);                                  \
-        return ret;                                 \
-    }
-
-#define REDIS_CMD_STR_INT_INT(command, method, return_body)        \
-    FUNCTION_LINE_3ARGS(method, a, b, c) {                         \
-        SETUP(command);                             \
-        WRITE_STRING(a);                            \
-        WRITE_SPACE();                              \
-        WRITE_INT(b);                               \
-        WRITE_SPACE();                              \
-        WRITE_INT(c);                               \
-        EXECUTE(return_body);                                  \
-        return ret;                                 \
-    }
-
-#define REDIS_CMD_STR_INT_BLOB(command, method, return_body)        \
-    FUNCTION_LINE_3ARGS(method, a, b, c) {                         \
-        SETUP(command);                             \
-        WRITE_STRING(a);                            \
-        WRITE_SPACE();                              \
-        WRITE_INT(b);                               \
-        WRITE_SPACE();                              \
-        WRITE_BLOB(c);                               \
-        EXECUTE(return_body);                                  \
-        return ret;                                 \
-    }
-
-#define REDIS_CMD_STR_STR(command, method, return_body)        \
-    FUNCTION_LINE_2ARGS(method, a, b) {             \
-        SETUP(command);                             \
-        WRITE_STRING(a);                            \
-        WRITE_SPACE();                              \
-        WRITE_STRING(b);                            \
-        EXECUTE(return_body);                                  \
-        return ret;                                 \
-    }
-
-#define REDIS_CMD_STR_BLOB(command, method, return_body)       \
-    FUNCTION_LINE_2ARGS(method, a, b) {             \
-        SETUP(command);                             \
-        WRITE_STRING(a);                            \
-        WRITE_SPACE();                              \
-        WRITE_BLOB(b);                              \
-        EXECUTE(return_body);                                  \
-        return ret;                                 \
-    }
-
-#define REDIS_CMD_NOARGS(command, method, return_body)        \
-    FUNCTION_LINE_NOARGS(method) {            \
-        SETUP(command);                          \
+#define REDIS_CMD_0(command, method, return_body)           \
+    FUNCTION_LINE_NOARGS(method) {                          \
+        SETUP(command);                                     \
         EXECUTE(return_body);                               \
-        return ret;                              \
+        return ret;                                         \
+    }
+
+#define REDIS_CMD_1(command, method, arg_type, return_body) \
+    FUNCTION_LINE_1ARG(method, a) {                         \
+        SETUP(command);                                     \
+        arg_type(a);                                        \
+        EXECUTE(return_body);                               \
+        return ret;                                         \
+    }
+
+#define REDIS_CMD_2(command, method, arg1_type, arg2_type, return_body) \
+    FUNCTION_LINE_2ARGS(method, a, b) {                                 \
+        SETUP(command);                                                 \
+        arg1_type(a);                                                   \
+        WRITE_SPACE();                                                  \
+        arg2_type(b);                                                   \
+        EXECUTE(return_body);                                           \
+        return ret;                                                     \
+    }
+
+#define REDIS_CMD_3(command, method, arg1_type, arg2_type, arg3_type, return_body) \
+    FUNCTION_LINE_3ARGS(method, a, b, c) {                              \
+        SETUP(command);                                                 \
+        arg1_type(a);                                                   \
+        WRITE_SPACE();                                                  \
+        arg2_type(b);                                                   \
+        WRITE_SPACE();                                                  \
+        arg3_type(c);                                                   \
+        EXECUTE(return_body);                                           \
+        return ret;                                                     \
     }

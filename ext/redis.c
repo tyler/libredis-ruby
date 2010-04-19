@@ -119,6 +119,25 @@ REDIS_CMD_1(LPOP, lpop, STR, ANY)
 REDIS_CMD_1(RPOP, rpop, STR, ANY)
 REDIS_CMD_2(RPOPLPUSH, rpoplpush, STR, STR, ANY)
 
+REDIS_CMD_2(SADD, sadd, STR, BLOB, ANY)
+REDIS_CMD_2(SREM, srem, STR, BLOB, ANY)
+REDIS_CMD_1(SPOP, spop, STR, ANY)
+REDIS_CMD_3(SMOVE, smove, STR, STR, BLOB, ANY)
+REDIS_CMD_1(SCARD, scard, STR, ANY)
+REDIS_CMD_2(SISMEMBER, sismember, STR, BLOB, BOOLEAN)
+REDIS_CMD_1(SRANDMEMBER, srandmember, STR, ANY)
+
+REDIS_CMD_3(ZADD, zadd, STR, INT, BLOB, ANY)
+REDIS_CMD_2(ZREM, zrem, STR, BLOB, ANY)
+REDIS_CMD_3(ZINCRBY, zincrby, STR, INT, BLOB, ANY)
+REDIS_CMD_2(ZRANK, zrank, STR, BLOB, ANY)
+REDIS_CMD_2(ZREVRANK, zrevrank, STR, BLOB, ANY)
+REDIS_CMD_1(ZCARD, zcard, STR, ANY)
+REDIS_CMD_2(ZSCORE, zscore, STR, BLOB, INTEGER)
+REDIS_CMD_3(ZREMRANGEBYRANK, zremrangebyrank, STR, INT, INT, ANY)
+REDIS_CMD_3(ZREMRANGEBYSCORE, zremrangebyscore, STR, INT, INT, ANY)
+
+
 void Init_redis() {
     cRedis = rb_define_class("Redis", rb_cObject);
     rb_define_alloc_func(cRedis, Redis_alloc);
@@ -165,8 +184,24 @@ void Init_redis() {
     rb_define_method(cRedis, "rpop", Redis_rpop, 1);
     rb_define_method(cRedis, "rpoplpush", Redis_rpoplpush, 2);
 
+    rb_define_method(cRedis, "sadd", Redis_sadd, 2);
+    rb_define_method(cRedis, "srem", Redis_srem, 2);
+    rb_define_method(cRedis, "spop", Redis_spop, 1);
+    rb_define_method(cRedis, "smove", Redis_smove, 3);
+    rb_define_method(cRedis, "scard", Redis_scard, 1);
+    rb_define_method(cRedis, "sismember", Redis_sismember, 2);
+    rb_define_method(cRedis, "srandmember", Redis_srandmember, 1);
 
-    
+    rb_define_method(cRedis, "zadd", Redis_zadd, 3);
+    rb_define_method(cRedis, "zrem", Redis_zrem, 2);
+    rb_define_method(cRedis, "zincrby", Redis_zincrby, 3);
+    rb_define_method(cRedis, "zrank", Redis_zrank, 2);
+    rb_define_method(cRedis, "zrevrank", Redis_zrevrank, 2);
+    rb_define_method(cRedis, "zcard", Redis_zcard, 1);
+    rb_define_method(cRedis, "zscore", Redis_zscore, 2);
+    rb_define_method(cRedis, "zremrangebyrank", Redis_zremrangebyrank, 3);
+    rb_define_method(cRedis, "zremrangebyscore", Redis_zremrangebyscore, 3);
+
 
     cRedisError = rb_define_class("RedisError", rb_eStandardError);
 }

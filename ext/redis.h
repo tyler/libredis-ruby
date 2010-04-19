@@ -121,6 +121,9 @@ typedef struct {
         rb_raise(cRedisError, "Unexpected return type from Redis"); \
     }
 
+#define INTEGER \
+    VALUE ret = INT2FIX(atoi(reply->data))
+
 #define EXECUTE(return_body)                    \
     FINISH_BATCH();                             \
     RUN_EXECUTE();                              \

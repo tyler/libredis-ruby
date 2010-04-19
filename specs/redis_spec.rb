@@ -233,11 +233,27 @@ describe 'Redis' do
       end
     end
 
+    describe :incrby do
+      it 'increments the value of a key by a specified value' do
+        @redis.set('incr_test', '0')
+        @redis.incrby('incr_test', 2).should == 2
+        @redis.get('incr_test').should == '2'
+      end
+    end
+
     describe :decr do
       it 'decrements the value of a key' do
         @redis.set('decr_test', '3')
         @redis.decr('decr_test').should == 2
         @redis.get('decr_test').should == '2'
+      end
+    end
+
+    describe :decrby do
+      it 'decrements the value of a key' do
+        @redis.set('decr_test', '3')
+        @redis.decrby('decr_test', 2).should == 1
+        @redis.get('decr_test').should == '1'
       end
     end
 

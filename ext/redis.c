@@ -93,9 +93,6 @@ REDIS_CMD_2(MOVE, move, STR, INT, STATUS)
 REDIS_CMD_0(FLUSHDB, flush_db, STATUS)
 REDIS_CMD_0(FLUSHALL, flush_all, STATUS)
 
-REDIS_CMD_1(INCR, incr, STR, ANY)
-REDIS_CMD_1(DECR, decr, STR, ANY)
-
 #define KEYS_RETURN \
     VALUE ret = rb_str_split(rb_str_new(reply->data, reply->length), " ")
 
@@ -105,6 +102,10 @@ REDIS_CMD_2(SET, set, STR, BLOB, ANY)
 REDIS_CMD_1(GET, get, STR, ANY)
 REDIS_CMD_2(GETSET, get_set, STR, BLOB, ANY)
 REDIS_CMD_2(SETNX, setnx, STR, BLOB, ANY)
+REDIS_CMD_1(INCR, incr, STR, ANY)
+REDIS_CMD_2(INCRBY, incrby, STR, INT, ANY)
+REDIS_CMD_1(DECR, decr, STR, ANY)
+REDIS_CMD_2(DECRBY, decrby, STR, INT, ANY)
 
 REDIS_CMD_2(RPUSH, rpush, STR, BLOB, ANY)
 REDIS_CMD_2(LPUSH, lpush, STR, BLOB, ANY)
@@ -148,7 +149,9 @@ void Init_redis() {
     rb_define_method(cRedis, "getset", Redis_get_set, 2);
     rb_define_method(cRedis, "setnx", Redis_setnx, 2);
     rb_define_method(cRedis, "incr", Redis_incr, 1);
+    rb_define_method(cRedis, "incrby", Redis_incrby, 2);
     rb_define_method(cRedis, "decr", Redis_decr, 1);
+    rb_define_method(cRedis, "decrby", Redis_decrby, 2);
 
     rb_define_method(cRedis, "rpush", Redis_rpush, 2);
     rb_define_method(cRedis, "lpush", Redis_lpush, 2);
